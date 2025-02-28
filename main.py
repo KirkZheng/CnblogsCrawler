@@ -4,46 +4,111 @@ from bs4 import BeautifulSoup  # 用于解析HTML内容
 import json  # 用于处理JSON数据
 import csv  # 用于处理CSV文件
 
-def get_page_info(url):
-    """
-    获取指定URL页面的文章信息
-    Args:
-        url: 目标网页的URL
-    Returns:
-        articles: 包含文章信息的列表，每篇文章为一个字典
-    """
-    try:
-        # 发送HTTP GET请求并获取响应
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        # 使用BeautifulSoup解析HTML内容
-        soup = BeautifulSoup(response.text, 'html.parser')
-        
-        articles = []
-        # 定义可能的文章选择器
-        selectors = ['article', '.post', '.article']
-        article_elements = []
-        
-        # 尝试不同的选择器来查找文章元素
-        for selector in selectors:
-            article_elements = soup.select(selector)
-            if article_elements:
-                break
-        
-        # 提取每篇文章的信息
-        for article in article_elements:
-            articles.append({
-                'title': next((e.text.strip() for e in article.select('h1, h2, .title') if e), '未找到标题'),
-                'publish_date': next((e.text.strip() for e in article.select('time, .date, .timestamp') if e), '未找到发布时间'),
-                'link': next((a.get('href', '') for a in article.select('a') if 'href' in a.attrs), '')
-            })
-        
-        return articles
-        
-    except Exception as e:
-        print(f"错误: {str(e)}")
-        return []
-
+def get_page_info(url, max_articles=20):
+    """获取指定URL页面的文章信息"""
+    # 检查是否是博客园URL
+    if 'cnblogs.com' in url:
+        try:
+            # 设置请求头，模拟浏览器访问
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Referer': 'https://www.cnblogs.com'
+            }
+            
+            articles = []
+            page = 1
+            
+            # 循环获取文章，直到达到目标数量
+            while len(articles) < max_articles:
+                # 构造分页URL
+                if page > 1:
+                    paged_url = f"{url}?page={page}" if '?' not in url else f"{url}&page={page}"
+                else:
+                    paged_url = url
+                
+                # 发送请求获取页面内容
+                response = requests.get(paged_url, headers=headers, timeout=10)
+                response.raise_for_status()
+                soup = BeautifulSoup(response.text, 'html.parser')
+                    # 判断是否为博文页面
+                if '/p/' in url:
+                    # 提取文章信息
+                    title = soup.select_one('#cb_post_title_url').text.strip() if soup.select_one('#cb_post_title_url') else ''
+                    author = soup.select_one('#author_profile_detail a').text.strip() if soup.select_one('#author_profile_detail a') else ''
+                    publish_date = soup.select_one('#post-date').text.strip() if soup.select_one('#post-date') else ''
+                    content = soup.select_one('#cnblogs_post_body').get_text(strip=True) if soup.select_one('#cnblogs_post_body') else ''
+                    read_count = soup.select_one('#post_view_count').text.strip() if soup.select_one('#post_view_count') else '0'
+                    comment_count = soup.select_one('#post_comment_count').text.strip() if soup.select_one('#post_comment_count') else '0'
+                    
+                    articles.append({
+                        'title': title,
+                        'publish_date': publish_date,
+                        'link': url,
+                        'author': author,
+                        'category': '博客园文章',
+                        'summary': content[:200] + '...' if len(content) > 200 else content,
+                        'content': content,
+                        'read_count': read_count,
+                        'comment_count': comment_count,
+                        'retweet_count': '0',
+                        'like_count': '0'
+                    })
+                else:
+                    # 获取博客园主页的文章列表
+                    article_list = soup.select('.post-item')
+                    for article in article_list:
+                        try:
+                            title_elem = article.select_one('.post-item-title')
+                            title = title_elem.text.strip() if title_elem else ''
+                            link = title_elem['href'] if title_elem and 'href' in title_elem.attrs else ''
+                            author_elem = article.select_one('.post-item-author')
+                            author = author_elem.text.strip() if author_elem else ''
+                            publish_date = article.select_one('.post-item-foot .post-item-date').text.strip() if article.select_one('.post-item-foot .post-item-date') else ''
+                            summary = article.select_one('.post-item-summary').get_text(strip=True) if article.select_one('.post-item-summary') else ''
+                            read_count = article.select_one('.post-item-view-count').text.strip().replace('阅读', '').strip() if article.select_one('.post-item-view-count') else '0'
+                            comment_count = article.select_one('.post-item-comment-count').text.strip().replace('评论', '').strip() if article.select_one('.post-item-comment-count') else '0'
+                            
+                            # 对于主页文章，我们不需要获取完整内容
+                            articles.append({
+                                'title': title,
+                                'publish_date': publish_date,
+                                'link': link,
+                                'author': author,
+                                'category': '博客园文章',
+                                'summary': summary,
+                                'content': summary,  # 对于主页文章，使用摘要作为内容
+                                'read_count': read_count.replace('阅读','').strip(),
+                                'comment_count': comment_count.replace('评论','').strip(),
+                                'retweet_count': '0',
+                                'like_count': '0'
+                            })
+                        except Exception as e:
+                            print(f'处理博客园文章时出错: {str(e)}')
+                            continue
+            
+                # 如果没有找到更多文章，退出循环
+                if not article_list:
+                    break
+                
+                page += 1
+                
+                # 如果已经获取足够的文章，退出循环
+                if len(articles) >= max_articles:
+                    break
+            
+            if not articles:
+                raise Exception('未找到任何文章')
+            
+            # 按阅读量排序并返回前N篇文章
+            articles.sort(key=lambda x: int(x['read_count']), reverse=True)
+            return articles[:max_articles]
+            
+        except Exception as e:
+            raise Exception(f'博客园爬取错误: {str(e)}')
+    # 如果不是特定网站，使用通用爬取逻辑
+    else:
+        raise Exception('不支持的网站，目前只支持博客园')
 def save_data(data, base_name='articles'):
     """
     将数据保存为JSON和CSV格式
@@ -71,21 +136,24 @@ def main():
     """
     主函数：爬取指定网页的文章信息并保存
     """
-    url = "https://kirkzheng.github.io/"
+    url = input("请输入博客园文章或博主主页URL: ")
     print(f"正在获取 {url} 的文章信息...")
     # 获取文章信息
-    articles = get_page_info(url)
-    
-    # 显示和保存结果
-    if articles:
-        print(f"\n找到 {len(articles)} 篇文章")
-        for article in articles:
-            print(f"\n标题: {article['title']}")
-            print(f"发布时间: {article['publish_date']}")
-            print(f"链接: {article['link']}")
-        save_data(articles)
-    else:
-        print("未找到任何文章信息")
+    try:
+        articles = get_page_info(url)
+        
+        # 显示和保存结果
+        if articles:
+            print(f"\n找到 {len(articles)} 篇文章")
+            for article in articles:
+                print(f"\n标题: {article['title']}")
+                print(f"发布时间: {article['publish_date']}")
+                print(f"链接: {article['link']}")
+            save_data(articles)
+        else:
+            print("未找到任何文章信息")
+    except Exception as e:
+        print(f"爬取失败: {str(e)}")
 
 if __name__ == '__main__':
     main()

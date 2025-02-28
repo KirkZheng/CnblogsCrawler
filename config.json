@@ -1,0 +1,38 @@
+{
+  "sites": [
+    {
+      "name": "博客园",
+      "url": "https://www.cnblogs.com/",
+      "selectors": {
+        "article": [
+          ".day",
+          ".post"
+        ],
+        "title": [
+          "#cb_post_title_url",
+          ".postTitle a"
+        ],
+        "date": [
+          "#post-date",
+          ".dayTitle"
+        ],
+        "content": [
+          "#cnblogs_post_body",
+          ".postCon"
+        ],
+        "author": [
+          "#author_profile_detail a"
+        ]
+      }
+    }
+  ],
+  "settings": {
+    "timeout": 5,
+    "retry_times": 1,
+    "save_format": [
+      "json",
+      "csv"
+    ],
+    "auto_save": true
+  }
+}
