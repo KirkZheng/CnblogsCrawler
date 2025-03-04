@@ -141,6 +141,7 @@ class MainWindow(QMainWindow):
         search_layout = QHBoxLayout()
         self.search_input = QLineEdit()
         self.search_input.setPlaceholderText('在结果中搜索...')
+        self.search_input.returnPressed.connect(self.search_results)  # 添加回车键触发搜索
         search_button = QPushButton('搜索')
         search_button.clicked.connect(self.search_results)
         search_layout.addWidget(self.search_input)
@@ -276,6 +277,9 @@ class MainWindow(QMainWindow):
             title_item = QTableWidgetItem(article.get('title', ''))
             title_item.setData(Qt.UserRole, article.get('link', ''))  # 将链接存储在标题项的用户数据中
             author_item = QTableWidgetItem(article.get('author', ''))
+            author_link = article.get('author_link', '')
+            if author_link:  # 只有当作者链接存在时才设置
+                author_item.setData(Qt.UserRole, author_link)
             self.table.setItem(row, 0, title_item)
             self.table.setItem(row, 1, author_item)
 
@@ -301,15 +305,18 @@ class MainWindow(QMainWindow):
 
     def on_cell_double_clicked(self, row, column):
         """处理表格单元格双击事件"""
-        # 只处理标题列（第1列）的双击事件
-        if column == 0:  # 标题列的索引
-            title_item = self.table.item(row, column)
-            if title_item:
-                link = title_item.data(Qt.UserRole)  # 从标题项的用户数据中获取链接
+        item = self.table.item(row, column)
+        if item:
+            if column == 0:  # 标题列
+                link = item.data(Qt.UserRole)  # 从标题项的用户数据中获取链接
                 if link:
-                    # 使用系统默认浏览器打开链接
                     import webbrowser
                     webbrowser.open(link)
+            elif column == 1:  # 作者列
+                author_link = item.data(Qt.UserRole)  # 从作者项的用户数据中获取链接
+                if author_link:
+                    import webbrowser
+                    webbrowser.open(author_link)
 
 def main():
     app = QApplication(sys.argv)

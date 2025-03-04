@@ -4,8 +4,9 @@ from bs4 import BeautifulSoup  # 用于解析HTML内容
 import json  # 用于处理JSON数据
 import csv  # 用于处理CSV文件
 
-def get_page_info(url, max_articles=20):
-    """获取指定URL页面的文章信息"""
+def get_page_info(url, max_articles=100):
+    """获取指定URL页面的文章信息，默认随机爬取100篇文章"""
+    import random
     # 检查是否是博客园URL
     if 'cnblogs.com' in url:
         try:
@@ -64,6 +65,10 @@ def get_page_info(url, max_articles=20):
                             link = title_elem['href'] if title_elem and 'href' in title_elem.attrs else ''
                             author_elem = article.select_one('.post-item-author')
                             author = author_elem.text.strip() if author_elem else ''
+                            author_link = author_elem['href'] if author_elem and 'href' in author_elem.attrs else ''
+                            # 确保作者链接格式正确
+                            if author_link and not author_link.startswith('http'):
+                                author_link = 'https://www.cnblogs.com' + author_link
                             publish_date = article.select_one('.post-item-foot .post-item-date').text.strip() if article.select_one('.post-item-foot .post-item-date') else ''
                             summary = article.select_one('.post-item-summary').get_text(strip=True) if article.select_one('.post-item-summary') else ''
                             read_count = article.select_one('.post-item-view-count').text.strip().replace('阅读', '').strip() if article.select_one('.post-item-view-count') else '0'
@@ -75,6 +80,7 @@ def get_page_info(url, max_articles=20):
                                 'publish_date': publish_date,
                                 'link': link,
                                 'author': author,
+                                'author_link': author_link,
                                 'category': '博客园文章',
                                 'summary': summary,
                                 'content': summary,  # 对于主页文章，使用摘要作为内容
@@ -100,9 +106,10 @@ def get_page_info(url, max_articles=20):
             if not articles:
                 raise Exception('未找到任何文章')
             
-            # 按阅读量排序并返回前N篇文章
-            articles.sort(key=lambda x: int(x['read_count']), reverse=True)
-            return articles[:max_articles]
+            # 如果文章数量超过要求，随机选择指定数量的文章
+            if len(articles) > max_articles:
+                articles = random.sample(articles, max_articles)
+            return articles
             
         except Exception as e:
             raise Exception(f'博客园爬取错误: {str(e)}')
@@ -132,28 +139,4 @@ def save_data(data, base_name='articles'):
     
     print(f"数据已保存到 {base_name}.json 和 {base_name}.csv")
 
-def main():
-    """
-    主函数：爬取指定网页的文章信息并保存
-    """
-    url = input("请输入博客园文章或博主主页URL: ")
-    print(f"正在获取 {url} 的文章信息...")
-    # 获取文章信息
-    try:
-        articles = get_page_info(url)
-        
-        # 显示和保存结果
-        if articles:
-            print(f"\n找到 {len(articles)} 篇文章")
-            for article in articles:
-                print(f"\n标题: {article['title']}")
-                print(f"发布时间: {article['publish_date']}")
-                print(f"链接: {article['link']}")
-            save_data(articles)
-        else:
-            print("未找到任何文章信息")
-    except Exception as e:
-        print(f"爬取失败: {str(e)}")
-
-if __name__ == '__main__':
-    main()
+# 移除命令行入口，保留核心功能供GUI调用
